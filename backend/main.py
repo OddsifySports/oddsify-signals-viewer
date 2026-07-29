@@ -20,6 +20,13 @@ import os
 # Import database module
 from database import save_signals, get_signal_history, get_history_stats
 
+# Import auth module
+from auth import (
+    verify_membership, generate_username_from_email, generate_password,
+    hash_password, verify_password, create_access_token, get_user_from_token,
+    format_admin_notification, VALID_MEMBERSHIPS
+)
+
 app = FastAPI(title="Oddsify Signals Viewer")
 
 # CORS for frontend
@@ -412,6 +419,138 @@ async def get_history_stats_endpoint(days: int = 7):
     
     stats = get_history_stats(days=days)
     return stats
+
+# ============== AUTH ENDPOINTS ==============
+
+class RegisterRequest(BaseModel):
+    email: str
+    membership: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/auth/register")
+async def register_user(request: RegisterRequest):
+    """
+    Register new user
+    
+    - Verifies membership (TERMINAL, ONLINE, or INSIDER)
+    - Generates username from email
+    - Generates secure password
+    - Sends credentials to admin
+    - Returns success message
+    """
+    from database import create_user, get_user_by_email
+    
+    email = request.email.lower()
+    membership = request.membership.upper()
+    
+    # Check if user already exists
+    existing = get_user_by_email(email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Verify membership
+    if not verify_membership(email, membership):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid membership type. Must be one of: {', '.join(VALID_MEMBERSHIPS)}"
+        )
+    
+    # Generate username and password
+    username = generate_username_from_email(email)
+    password = generate_password()
+    
+    # Check if username exists, add number if needed
+    counter = 1
+    original_username = username
+    while get_user_by_username(username):
+        username = f"{original_username}_{counter}"
+        counter += 1
+    
+    # Hash password and create user
+    password_hash = hash_password(password)
+    user_id = create_user(username, email, password_hash, membership)
+    
+    # Format admin notification
+    notification = format_admin_notification(email, username, password, membership)
+    
+    # TODO: Send email to admin
+    # For now, print to console (Railway logs)
+    print("\n" + "="*60)
+    print("NEW USER REGISTRATION")
+    print("="*60)
+    print(notification)
+    print("="*60 + "\n")
+    
+    # In production, send email here:
+    # await send_email(ADMIN_EMAIL, "New User Registration", notification)
+    
+    return {
+        "message": "Registration successful! Your credentials have been sent to the admin for verification.",
+        "username": username,
+        "email": email,
+        "membership": membership
+    }
+
+@app.post("/api/auth/login")
+async def login(request: LoginRequest):
+    """
+    Login user
+    
+    - Verifies username and password
+    - Returns JWT token
+    """
+    from database import get_user_by_username
+    
+    user = get_user_by_username(request.username)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    if not verify_password(request.password, user['password_hash']):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    if not user['is_active']:
+        raise HTTPException(status_code=403, detail="Account deactivated")
+    
+    # Create access token
+    token_data = {
+        "sub": user['username'],
+        "role": user.get('role', 'viewer'),
+        "email": user['email'],
+        "membership": user.get('membership')
+    }
+    
+    access_token = create_access_token(token_data)
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "username": user['username'],
+            "email": user['email'],
+            "role": user.get('role', 'viewer'),
+            "membership": user.get('membership')
+        }
+    }
+
+@app.get("/api/auth/me")
+async def get_current_user(authorization: str):
+    """Get current user from token"""
+    
+    # Extract token from "Bearer <token>"
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    
+    token = authorization.split(" ")[1]
+    user = get_user_from_token(token)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    return user
 
 @app.delete("/api/files/{file_id}")
 async def delete_file(file_id: str):

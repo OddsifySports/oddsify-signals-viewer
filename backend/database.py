@@ -209,5 +209,94 @@ def get_active_subscriptions() -> List[Dict]:
     
     return [dict(row) for row in rows]
 
+def create_user(username: str, email: str, password_hash: str, membership: str, role: str = "viewer") -> int:
+    """
+    Create new user account
+    
+    Args:
+        username: User's username
+        email: User's email
+        password_hash: Hashed password
+        membership: Membership type (TERMINAL, ONLINE, INSIDER)
+        role: User role (admin or viewer)
+    
+    Returns:
+        User ID
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        INSERT INTO users (username, password_hash, email, is_active)
+        VALUES (?, ?, ?, 1)
+    """, (username, password_hash, email))
+    
+    user_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return user_id
+
+def get_user_by_username(username: str) -> Optional[Dict]:
+    """Get user by username"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM users WHERE username = ? AND is_active = 1", (username,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    return dict(row) if row else None
+
+def get_user_by_email(email: str) -> Optional[Dict]:
+    """Get user by email"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM users WHERE email = ? AND is_active = 1", (email,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    return dict(row) if row else None
+
+def update_user_membership(username: str, membership: str) -> bool:
+    """Update user's membership type"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        UPDATE users SET membership = ? WHERE username = ?
+    """, (membership, username))
+    
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    
+    return affected > 0
+
+def get_all_users() -> List[Dict]:
+    """Get all users (for admin)"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, username, email, membership, role, created_at, is_active FROM users")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
+def deactivate_user(username: str) -> bool:
+    """Deactivate user account"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("UPDATE users SET is_active = 0 WHERE username = ?", (username,))
+    
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    
+    return affected > 0
+
 # Initialize DB on import
 init_db()

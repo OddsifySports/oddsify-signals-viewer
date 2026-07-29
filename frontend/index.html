@@ -298,6 +298,9 @@
     <header>
       <div class="logo">ODDSIFY <span>SIGNALS</span> VIEWER</div>
       <div style="display: flex; gap: 1rem; align-items: center;">
+        <button id="authBtn" class="btn-upload" onclick="showLoginModal()" style="background: var(--purple);">
+          👤 Login
+        </button>
         <button class="btn-upload" onclick="exportToCSV()" style="background: var(--teal);">
           📊 Export CSV
         </button>
@@ -307,6 +310,18 @@
       </div>
       <input type="file" id="fileInput" accept=".md" onchange="handleFileUpload(event)">
     </header>
+      
+    <!-- User Profile (hidden by default) -->
+    <div id="userProfile" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-2); border-radius: 8px; border: 1px solid var(--line);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <span style="color: var(--dim);">Logged in as:</span>
+          <strong id="usernameDisplay" style="color: var(--paper); margin-left: 0.5rem;"></strong>
+          <span id="roleBadge" class="badge badge-small" style="margin-left: 0.5rem;"></span>
+        </div>
+        <button onclick="logout()" style="background: var(--coral); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Logout</button>
+      </div>
+    </div>
     
     <!-- Upload Area (drag & drop) -->
     <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
@@ -379,38 +394,223 @@
     </div>
   </div>
   
+  <!-- Login Modal -->
+  <div id="loginModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: var(--bg-2); padding: 2rem; border-radius: 12px; max-width: 400px; width: 90%; border: 1px solid var(--line);">
+      <h2 style="margin-top: 0; color: var(--paper);">👤 Login</h2>
+      <input type="text" id="loginUsername" placeholder="Username" style="width: 100%; padding: 0.75rem; margin-bottom: 1rem; background: var(--bg-3); border: 1px solid var(--line); color: var(--paper); border-radius: 6px;">
+      <input type="password" id="loginPassword" placeholder="Password" style="width: 100%; padding: 0.75rem; margin-bottom: 1rem; background: var(--bg-3); border: 1px solid var(--line); color: var(--paper); border-radius: 6px;">
+      <button onclick="login()" style="width: 100%; padding: 0.75rem; background: var(--purple); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Login</button>
+      <p style="text-align: center; margin-top: 1rem; color: var(--dim);">
+        Don't have an account? 
+        <a href="#" onclick="showRegisterModal(); hideLoginModal();" style="color: var(--teal);">Register</a>
+      </p>
+      <button onclick="hideLoginModal()" style="margin-top: 1rem; width: 100%; padding: 0.5rem; background: transparent; color: var(--dim); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">Cancel</button>
+    </div>
+  </div>
+  
+  <!-- Register Modal -->
+  <div id="registerModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: var(--bg-2); padding: 2rem; border-radius: 12px; max-width: 400px; width: 90%; border: 1px solid var(--line);">
+      <h2 style="margin-top: 0; color: var(--paper);">📝 Register</h2>
+      <p style="color: var(--dim); font-size: 0.9rem; margin-bottom: 1rem;">
+        Registration requires valid Oddsify membership (Terminal, Online, or Insider). 
+        Your credentials will be sent to the admin for verification.
+      </p>
+      <input type="email" id="registerEmail" placeholder="Email address" style="width: 100%; padding: 0.75rem; margin-bottom: 1rem; background: var(--bg-3); border: 1px solid var(--line); color: var(--paper); border-radius: 6px;">
+      <select id="registerMembership" style="width: 100%; padding: 0.75rem; margin-bottom: 1rem; background: var(--bg-3); border: 1px solid var(--line); color: var(--paper); border-radius: 6px;">
+        <option value="">Select Membership Type</option>
+        <option value="TERMINAL">Oddsify Terminal</option>
+        <option value="ONLINE">Oddsify Online</option>
+        <option value="INSIDER">Oddsify Insider</option>
+      </select>
+      <button onclick="register()" style="width: 100%; padding: 0.75rem; background: var(--teal); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Register</button>
+      <p style="text-align: center; margin-top: 1rem; color: var(--dim);">
+        Already have an account? 
+        <a href="#" onclick="showLoginModal(); hideRegisterModal();" style="color: var(--purple);">Login</a>
+      </p>
+      <button onclick="hideRegisterModal()" style="margin-top: 1rem; width: 100%; padding: 0.5rem; background: transparent; color: var(--dim); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">Cancel</button>
+    </div>
+  </div>
+  
   <script>
     const API_BASE = window.location.origin; // Use current origin (works on Railway and localhost)
     let allSignals = [];
     let currentFileId = null;
+    let currentUser = null;
+    let authToken = null;
+    
+    // ============ AUTH FUNCTIONS ============
+    
+    function showLoginModal() {
+      document.getElementById('loginModal').style.display = 'flex';
+    }
+    
+    function hideLoginModal() {
+      document.getElementById('loginModal').style.display = 'none';
+    }
+    
+    function showRegisterModal() {
+      document.getElementById('registerModal').style.display = 'flex';
+    }
+    
+    function hideRegisterModal() {
+      document.getElementById('registerModal').style.display = 'none';
+    }
+    
+    async function login() {
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      
+      if (!username || !password) {
+        alert('Please enter username and password');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.detail || 'Login failed');
+        }
+        
+        // Store token and user info
+        authToken = data.access_token;
+        currentUser = data.user;
+        localStorage.setItem('authToken', authToken);
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        
+        // Update UI
+        updateUserProfile();
+        hideLoginModal();
+        
+        // Clear form
+        document.getElementById('loginUsername').value = '';
+        document.getElementById('loginPassword').value = '';
+        
+        alert(`Welcome back, ${currentUser.username}!`);
+      } catch (error) {
+        alert(`Login failed: ${error.message}`);
+      }
+    }
+    
+    async function register() {
+      const email = document.getElementById('registerEmail').value.trim().toLowerCase();
+      const membership = document.getElementById('registerMembership').value.toUpperCase();
+      
+      if (!email || !membership) {
+        alert('Please enter email and select membership type');
+        return;
+      }
+      
+      // Basic email validation
+      if (!email.includes('@')) {
+        alert('Please enter a valid email address');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, membership })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.detail || 'Registration failed');
+        }
+        
+        alert(`Registration successful!\n\nUsername: ${data.username}\n\nYour password has been sent to the admin for verification. You will receive it shortly.`);
+        hideRegisterModal();
+        
+        // Clear form
+        document.getElementById('registerEmail').value = '';
+        document.getElementById('registerMembership').value = '';
+      } catch (error) {
+        alert(`Registration failed: ${error.message}`);
+      }
+    }
+    
+    function logout() {
+      authToken = null;
+      currentUser = null;
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('currentUser');
+      updateUserProfile();
+      alert('Logged out successfully');
+    }
+    
+    function updateUserProfile() {
+      const profileDiv = document.getElementById('userProfile');
+      const authBtn = document.getElementById('authBtn');
+      
+      if (currentUser && authToken) {
+        // User is logged in
+        profileDiv.style.display = 'block';
+        authBtn.style.display = 'none';
+        
+        document.getElementById('usernameDisplay').textContent = currentUser.username;
+        
+        const roleBadge = document.getElementById('roleBadge');
+        roleBadge.textContent = currentUser.role.toUpperCase();
+        roleBadge.className = `badge badge-${currentUser.role === 'admin' ? 'coral' : 'teal'}`;
+      } else {
+        // User is logged out
+        profileDiv.style.display = 'none';
+        authBtn.style.display = 'block';
+      }
+    }
+    
+    // Check for existing session on page load
+    function checkAuthSession() {
+      const storedToken = localStorage.getItem('authToken');
+      const storedUser = localStorage.getItem('currentUser');
+      
+      if (storedToken && storedUser) {
+        authToken = storedToken;
+        currentUser = JSON.parse(storedUser);
+        updateUserProfile();
+      }
+    }
     
     // Export to CSV
     async function exportToCSV() {
-      try {
-        const url = `${API_BASE}/api/signals/export${currentFileId ? `?file_id=${currentFileId}` : ''}`;
-        const response = await fetch(url);
+     try {
+       const url = `${API_BASE}/api/signals/export${currentFileId ? `?file_id=${currentFileId}` : ''}`;
+       const response = await fetch(url);
         
-        if (!response.ok) {
-          throw new Error('Export failed');
-        }
+       if (!response.ok) {
+         throw new Error('Export failed');
+       }
         
-        // Create download link
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `oddsify_signals_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(downloadUrl);
+       // Create download link
+       const blob = await response.blob();
+       const downloadUrl = window.URL.createObjectURL(blob);
+       const a = document.createElement('a');
+       a.href = downloadUrl;
+       a.download = `oddsify_signals_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.csv`;
+       document.body.appendChild(a);
+       a.click();
+       document.body.removeChild(a);
+       window.URL.revokeObjectURL(downloadUrl);
         
-        console.log('✅ CSV exported successfully');
-      } catch (error) {
-        console.error('Export failed:', error);
-        alert(`Export failed: ${error.message}`);
-      }
+       console.log('✅ CSV exported successfully');
+     } catch (error) {
+       console.error('Export failed:', error);
+       alert(`Export failed: ${error.message}`);
+     }
     }
+    
+    // Initialize on page load
+    checkAuthSession();
     
     // Switch between current uploads and history
     async function switchView() {
