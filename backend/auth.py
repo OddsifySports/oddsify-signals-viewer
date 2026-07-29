@@ -6,9 +6,9 @@ JWT-based authentication with admin/viewer roles
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 import secrets
 import re
+import bcrypt
 
 # Configuration
 JWT_SECRET = secrets.token_urlsafe(32)  # In production, set via environment variable
@@ -104,6 +104,9 @@ def generate_password(length: int = 12) -> str:
     return password
 
 
+# Password hashing
+import bcrypt
+
 def hash_password(password: str) -> str:
     """
     Hash password using bcrypt
@@ -114,7 +117,11 @@ def hash_password(password: str) -> str:
     Returns:
         Hashed password
     """
-    return pwd_context.hash(password)
+    # bcrypt expects bytes
+    password_bytes = password.encode('utf-8')
+    # Generate salt and hash
+    hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -128,7 +135,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode('utf-8'),
+            hashed_password.encode('utf-8')
+        )
+    except Exception:
+        return False
 
 
 def create_access_token(data: Dict, expires_delta: Optional[timedelta] = None) -> str:

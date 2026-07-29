@@ -10,8 +10,13 @@ from datetime import datetime
 import json
 from typing import List, Dict, Optional
 
-DB_PATH = Path(os.getenv("DB_PATH", "/app/data/signals.db"))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+DB_PATH = Path(os.getenv("DB_PATH", "data/signals.db"))
+try:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+except (PermissionError, OSError):
+    # Fallback to current directory if can't create data/
+    DB_PATH = Path("signals.db")
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 def get_connection():
     """Get database connection"""
