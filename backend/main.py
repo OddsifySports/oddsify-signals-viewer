@@ -27,8 +27,8 @@ app.add_middleware(
 )
 
 # Paths
-UPLOAD_DIR = Path("/home/markusbot/oddsify-signals-viewer/uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/app/uploads"))
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Models
 class Signal(BaseModel):
