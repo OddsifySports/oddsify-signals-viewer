@@ -15,9 +15,6 @@ JWT_SECRET = secrets.token_urlsafe(32)  # In production, set via environment var
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 24
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # Valid membership types
 VALID_MEMBERSHIPS = {"TERMINAL", "ONLINE", "INSIDER"}
 
