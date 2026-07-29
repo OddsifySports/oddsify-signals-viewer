@@ -296,7 +296,7 @@
 <body>
   <div class="container">
     <header>
-      <div class="logo">ODDSIFY <span>SIGNALS</span> VIEWER</div>
+      <div class="logo">ODDSIFY <span>SIGNALS</span> VIEWER <span style="font-size: 0.7em; color: var(--dim); margin-left: 1rem;">| Members Only</span></div>
       <div style="display: flex; gap: 1rem; align-items: center;">
         <button id="authBtn" class="btn-upload" onclick="showLoginModal()" style="background: var(--purple);">
           👤 Login
@@ -490,6 +490,13 @@
         updateUserProfile();
         hideLoginModal();
         
+        // Show content and load signals
+        document.getElementById('uploadArea').style.display = 'flex';
+        document.getElementById('statsGrid').style.display = 'grid';
+        document.getElementById('filters').style.display = 'flex';
+        document.getElementById('content').style.display = 'block';
+        loadFiles(); // Load signals for authenticated user
+        
         // Clear form
         document.getElementById('loginUsername').value = '';
         document.getElementById('loginPassword').value = '';
@@ -545,6 +552,15 @@
       localStorage.removeItem('authToken');
       localStorage.removeItem('currentUser');
       updateUserProfile();
+      
+      // Hide all content, show login
+      document.getElementById('uploadArea').style.display = 'none';
+      document.getElementById('statsGrid').style.display = 'none';
+      document.getElementById('filters').style.display = 'none';
+      document.getElementById('content').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'none';
+      showLoginModal();
+      
       alert('Logged out successfully');
     }
     
@@ -578,6 +594,16 @@
         authToken = storedToken;
         currentUser = JSON.parse(storedUser);
         updateUserProfile();
+        // Load signals for authenticated user
+        loadFiles();
+      } else {
+        // No auth - show login modal immediately and hide content
+        showLoginModal();
+        document.getElementById('uploadArea').style.display = 'none';
+        document.getElementById('statsGrid').style.display = 'none';
+        document.getElementById('filters').style.display = 'none';
+        document.getElementById('content').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'none';
       }
     }
     
