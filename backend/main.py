@@ -18,7 +18,10 @@ from datetime import datetime
 import os
 
 # Import database module
-from database import save_signals, get_signal_history, get_history_stats
+from database import (
+    save_signals, get_signal_history, get_history_stats,
+    create_user, get_user_by_username, get_user_by_email
+)
 
 # Import auth module
 from auth import (
@@ -441,7 +444,6 @@ async def register_user(request: RegisterRequest):
     - Sends credentials to admin
     - Returns success message
     """
-    from database import create_user, get_user_by_email
     
     email = request.email.lower()
     membership = request.membership.upper()
@@ -502,8 +504,6 @@ async def login(request: LoginRequest):
     - Verifies username and password
     - Returns JWT token
     """
-    from database import get_user_by_username
-    
     user = get_user_by_username(request.username)
     
     if not user:
