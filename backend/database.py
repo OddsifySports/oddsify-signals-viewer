@@ -4,6 +4,7 @@ SQLite-based storage for signals history and user management
 """
 
 import sqlite3
+import os
 from pathlib import Path
 from datetime import datetime
 import json
