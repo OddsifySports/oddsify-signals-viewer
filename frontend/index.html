@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oddsify Signals Viewer</title>
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --bg-2: #12161f;
+      --bg-3: #171d29;
+      --line: #232a38;
+      --paper: #e8eaed;
+      --dim: #8b93a7;
+      --amber: #ffb020;
+      --teal: #2dd4bf;
+      --coral: #ff6b6b;
+      --green: #10b981;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--paper);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+    
+    .logo {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    
+    .logo span { color: var(--amber); }
+    
+    /* Upload Area */
+    .upload-area {
+      background: var(--bg-2);
+      border: 2px dashed var(--line);
+      border-radius: 8px;
+      padding: 3rem;
+      text-align: center;
+      margin-bottom: 2rem;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    
+    .upload-area:hover {
+      border-color: var(--amber);
+      background: var(--bg-3);
+    }
+    
+    .upload-area.dragover {
+      border-color: var(--teal);
+      background: rgba(45, 212, 191, 0.1);
+    }
+    
+    .upload-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    
+    .btn-upload {
+      background: var(--amber);
+      color: var(--bg);
+      border: none;
+      padding: 0.75rem 2rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1rem;
+      transition: all 0.2s;
+    }
+    
+    .btn-upload:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 176, 32, 0.3);
+    }
+    
+    input[type="file"] { display: none; }
+    
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .filter-group label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--dim);
+    }
+    
+    select, input[type="text"] {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      color: var(--paper);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      min-width: 200px;
+    }
+    
+    select:focus, input[type="text"]:focus {
+      outline: 2px solid var(--amber);
+      border-color: var(--amber);
+    }
+    
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+      background: var(--bg-2);
+      padding: 1.5rem;
+      border-radius: 8px;
+      border-left: 4px solid var(--amber);
+    }
+    
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--paper);
+    }
+    
+    .stat-label {
+      font-size: 0.85rem;
+      color: var(--dim);
+      margin-top: 0.5rem;
+    }
+    
+    /* Groups */
+    .groups-container {
+      display: grid;
+      gap: 2rem;
+    }
+    
+    .group-card {
+      background: var(--bg-2);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .group-header {
+      padding: 1rem 1.5rem;
+      background: var(--bg-3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+    
+    .group-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+    
+    .group-meta {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.85rem;
+      color: var(--dim);
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .badge-strong { background: rgba(255, 107, 107, 0.2); color: var(--coral); }
+    .badge-medium { background: rgba(255, 176, 32, 0.2); color: var(--amber); }
+    .badge-small { background: rgba(45, 212, 191, 0.2); color: var(--teal); }
+    
+    /* Table */
+    .table-container {
+      overflow-x: auto;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      background: var(--bg-3);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--dim);
+    }
+    
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+    
+    tr:hover {
+      background: var(--bg-3);
+    }
+    
+    .edge-positive { color: var(--green); font-weight: 600; }
+    .edge-negative { color: var(--coral); }
+    
+    .bucket-tag {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: var(--dim);
+    }
+    
+    .spinner {
+      border: 3px solid var(--line);
+      border-top-color: var(--amber);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--dim);
+    }
+    
+    .empty-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container { padding: 1rem; }
+      .filters { flex-direction: column; }
+      .group-header { flex-direction: column; gap: 1rem; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">ODDSIFY <span>SIGNALS</span> VIEWER</div>
+      <div>
+        <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
+          📁 Upload File
+        </button>
+        <input type="file" id="fileInput" accept=".md" onchange="handleFileUpload(event)">
+      </div>
+    </header>
+    
+    <!-- Upload Area (drag & drop) -->
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📤</div>
+      <h3>Upload Signals File</h3>
+      <p style="color: var(--dim); margin: 1rem 0;">
+        Drag and drop your markdown signals file here, or click to browse
+      </p>
+      <p style="font-size: 0.85rem; color: var(--dim);">
+        Supports .md files with Oddsify signals tables
+      </p>
+    </div>
+    
+    <!-- Loading State -->
+    <div id="loading" class="loading" style="display: none;">
+      <div class="spinner"></div>
+      <p>Processing signals...</p>
+    </div>
+    
+    <!-- Main Content -->
+    <div id="content" style="display: none;">
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid"></div>
+      
+      <!-- Filters -->
+      <div class="filters">
+        <div class="filter-group">
+          <label>Sport</label>
+          <select id="sportFilter" onchange="applyFilters()">
+            <option value="">All Sports</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Market</label>
+          <select id="marketFilter" onchange="applyFilters()">
+            <option value="">All Markets</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Bucket</label>
+          <select id="bucketFilter" onchange="applyFilters()">
+            <option value="">All Buckets</option>
+            <option value="STRONG">STRONG</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="SMALL">SMALL</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Search</label>
+          <input type="text" id="searchInput" placeholder="Player, team, or book..." oninput="applyFilters()">
+        </div>
+      </div>
+      
+      <!-- Groups -->
+      <div class="groups-container" id="groupsContainer"></div>
+    </div>
+    
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">📊</div>
+      <h3>No signals uploaded yet</h3>
+      <p>Upload a markdown signals file to get started</p>
+    </div>
+  </div>
+  
+  <script>
+    const API_BASE = 'http://localhost:8000';
+    let allSignals = [];
+    let currentFileId = null;
+    
+    // Drag & drop
+    const uploadArea = document.getElementById('uploadArea');
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        uploadFile(files[0]);
+      }
+    });
+    
+    async function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        await uploadFile(file);
+      }
+    }
+    
+    async function uploadFile(file) {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('content').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'none';
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          currentFileId = data.file_id;
+          await loadGroupedSignals(currentFileId);
+        } else {
+          alert(`Error: ${data.detail}`);
+          document.getElementById('emptyState').style.display = 'block';
+        }
+      } catch (error) {
+        alert(`Upload failed: ${error.message}`);
+        document.getElementById('emptyState').style.display = 'block';
+      } finally {
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+    
+    async function loadGroupedSignals(fileId = null) {
+      try {
+        const url = fileId 
+          ? `${API_BASE}/api/signals/grouped?file_id=${fileId}`
+          : `${API_BASE}/api/signals/grouped`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.groups && data.groups.length > 0) {
+          allSignals = data.groups.flatMap(g => g.signals);
+          populateFilters(data.groups);
+          updateStats(data.groups);
+          renderGroups(data.groups);
+          document.getElementById('content').style.display = 'block';
+        } else {
+          document.getElementById('emptyState').style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error loading signals:', error);
+        document.getElementById('emptyState').style.display = 'block';
+      }
+    }
+    
+    function populateFilters(groups) {
+      const sports = new Set();
+      const markets = new Set();
+      
+      groups.forEach(g => {
+        sports.add(g.league);
+        markets.add(g.market);
+      });
+      
+      const sportSelect = document.getElementById('sportFilter');
+      const marketSelect = document.getElementById('marketFilter');
+      
+      // Clear existing options (keep first)
+      sportSelect.innerHTML = '<option value="">All Sports</option>';
+      marketSelect.innerHTML = '<option value="">All Markets</option>';
+      
+      // Add options
+      [...sports].sort().forEach(sport => {
+        sportSelect.innerHTML += `<option value="${sport}">${sport}</option>`;
+      });
+      
+      [...markets].sort().forEach(market => {
+        marketSelect.innerHTML += `<option value="${market}">${market}</option>`;
+      });
+    }
+    
+    function updateStats(groups) {
+      const totalSignals = groups.reduce((sum, g) => sum + g.count, 0);
+      const avgEdge = groups.reduce((sum, g) => sum + g.avg_edge, 0) / groups.length || 0;
+      const maxEdge = Math.max(...groups.map(g => g.max_edge));
+      const strongCount = allSignals.filter(s => s.bucket === 'STRONG').length;
+      
+      document.getElementById('statsGrid').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-value">${totalSignals}</div>
+          <div class="stat-label">Total Signals</div>
+        </div>
+        <div class="stat-card" style="border-left-color: var(--teal);">
+          <div class="stat-value">${avgEdge.toFixed(1)}%</div>
+          <div class="stat-label">Average Edge</div>
+        </div>
+        <div class="stat-card" style="border-left-color: var(--coral);">
+          <div class="stat-value">${maxEdge.toFixed(1)}%</div>
+          <div class="stat-label">Max Edge</div>
+        </div>
+        <div class="stat-card" style="border-left-color: var(--amber);">
+          <div class="stat-value">${strongCount}</div>
+          <div class="stat-label">STRONG Signals</div>
+        </div>
+      `;
+    }
+    
+    function renderGroups(groups) {
+      const container = document.getElementById('groupsContainer');
+      
+      container.innerHTML = groups.map(group => {
+        const bucketClass = group.signals[0]?.bucket?.toLowerCase() || 'small';
+        
+        return `
+          <div class="group-card" data-market="${group.market}" data-league="${group.league}">
+            <div class="group-header">
+              <div>
+                <div class="group-title">${group.market} — ${group.league}</div>
+                <div class="group-meta">
+                  <span>${group.count} signals</span>
+                  <span>Avg edge: ${group.avg_edge.toFixed(1)}%</span>
+                  <span>Max edge: ${group.max_edge.toFixed(1)}%</span>
+                </div>
+              </div>
+              <span class="badge badge-${bucketClass}">${group.signals[0]?.bucket || 'MIXED'}</span>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bucket</th>
+                    <th>Player</th>
+                    <th>Team</th>
+                    <th>Side</th>
+                    <th>Line</th>
+                    <th>Price</th>
+                    <th>Edge</th>
+                    <th>EV</th>
+                    <th>Book</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${group.signals.map(signal => `
+                    <tr class="signal-row" data-bucket="${signal.bucket}" data-player="${signal.player.toLowerCase()}" data-team="${signal.team.toLowerCase()}" data-book="${signal.book.toLowerCase()}">
+                      <td><span class="bucket-tag badge-${signal.bucket.toLowerCase()}">${signal.bucket}</span></td>
+                      <td>${signal.player}</td>
+                      <td>${signal.team}</td>
+                      <td>${signal.side}</td>
+                      <td>${signal.line || '—'}</td>
+                      <td>${signal.price}</td>
+                      <td class="${signal.edge > 0 ? 'edge-positive' : 'edge-negative'}">${signal.edge > 0 ? '+' : ''}${signal.edge.toFixed(1)}%</td>
+                      <td class="${signal.ev > 0 ? 'edge-positive' : 'edge-negative'}">${signal.ev > 0 ? '+' : ''}${signal.ev.toFixed(1)}¢</td>
+                      <td>${signal.book}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function applyFilters() {
+      const sport = document.getElementById('sportFilter').value;
+      const market = document.getElementById('marketFilter').value;
+      const bucket = document.getElementById('bucketFilter').value;
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      
+      const groups = document.querySelectorAll('.group-card');
+      
+      groups.forEach(group => {
+        const groupLeague = group.dataset.league;
+        const groupMarket = group.dataset.market;
+        
+        // Filter groups
+        let showGroup = true;
+        if (sport && groupLeague !== sport) showGroup = false;
+        if (market && groupMarket !== market) showGroup = false;
+        
+        // Filter rows within group
+        const rows = group.querySelectorAll('.signal-row');
+        let visibleRows = 0;
+        
+        rows.forEach(row => {
+          let showRow = true;
+          
+          if (bucket && row.dataset.bucket !== bucket) showRow = false;
+          if (search) {
+            const matchesSearch = 
+              row.dataset.player.includes(search) ||
+              row.dataset.team.includes(search) ||
+              row.dataset.book.includes(search);
+            if (!matchesSearch) showRow = false;
+          }
+          
+          row.style.display = showRow ? '' : 'none';
+          if (showRow) visibleRows++;
+        });
+        
+        // Hide group if no visible rows
+        group.style.display = (showGroup && visibleRows > 0) ? '' : 'none';
+      });
+    }
+    
+    // Initial load - get all files
+    async function loadAllFiles() {
+      try {
+        const response = await fetch(`${API_BASE}/api/files`);
+        const data = await response.json();
+        
+        if (data.files && data.files.length > 0) {
+          // Load most recent file
+          currentFileId = data.files[0].id;
+          await loadGroupedSignals(currentFileId);
+        } else {
+          document.getElementById('emptyState').style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error loading files:', error);
+        document.getElementById('emptyState').style.display = 'block';
+      }
+    }
+    
+    // Load on startup
+    loadAllFiles();
+  </script>
+</body>
+</html>
