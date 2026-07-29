@@ -3,17 +3,22 @@ Oddsify Signals Viewer - Backend API
 FastAPI server for uploading and parsing sports betting signals from markdown files
 """
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, HTTPException, status, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import re
 import json
+import csv
+import io
 from pathlib import Path
 from datetime import datetime
 import os
+
+# Import database module
+from database import save_signals, get_signal_history, get_history_stats
 
 app = FastAPI(title="Oddsify Signals Viewer")
 
@@ -184,6 +189,17 @@ async def upload_file(file: UploadFile = File(...)):
         file_path = UPLOAD_DIR / safe_filename
         file_path.write_text(content_str)
         
+        # Save to database
+        try:
+            saved_count = save_signals(
+                [s.dict() for s in parsed['signals']],
+                file_id,
+                parsed['metadata']
+            )
+            print(f"✅ Saved {saved_count} signals to database")
+        except Exception as e:
+            print(f"⚠️  Database save failed: {e}")
+        
         # Create response
         file_id = file_path.stem
         result = SignalFile(
@@ -302,6 +318,100 @@ async def get_grouped_signals(file_id: Optional[str] = None):
     result.sort(key=lambda x: x['count'], reverse=True)
     
     return {'groups': result}
+
+@app.get("/api/signals/export")
+async def export_signals(file_id: Optional[str] = None, format: str = "csv"):
+    """Export signals to CSV"""
+    
+    # Get all signals (from one file or all files)
+    all_signals = []
+    metadata = {}
+    
+    if file_id:
+        file_path = UPLOAD_DIR / f"{file_id}.md"
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        content = file_path.read_text()
+        parsed = parse_markdown_signals(content)
+        all_signals = parsed['signals']
+        metadata = parsed['metadata']
+    else:
+        # Load from all files
+        for f in UPLOAD_DIR.glob("*.md"):
+            try:
+                content = f.read_text()
+                parsed = parse_markdown_signals(content)
+                all_signals.extend(parsed['signals'])
+            except:
+                continue
+    
+    if format != "csv":
+        raise HTTPException(status_code=400, detail="Only CSV format supported")
+    
+    # Create CSV
+    output = io.StringIO()
+    fieldnames = ['bucket', 'market', 'player', 'team', 'side', 'line', 'price', 
+                  'model_pct', 'mkt_pct', 'edge', 'ev', 'fair', 'book', 'sport', 'fetch_id']
+    
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    
+    for signal in all_signals:
+        writer.writerow({
+            'bucket': signal.bucket,
+            'market': signal.market,
+            'player': signal.player,
+            'team': signal.team,
+            'side': signal.side,
+            'line': signal.line or '',
+            'price': signal.price,
+            'model_pct': signal.model_pct,
+            'mkt_pct': signal.mkt_pct,
+            'edge': signal.edge,
+            'ev': signal.ev,
+            'fair': signal.fair,
+            'book': signal.book,
+            'sport': signal.sport,
+            'fetch_id': signal.fetch_id
+        })
+    
+    # Generate filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"oddsify_signals_{timestamp}.csv"
+    
+    # Return as downloadable file
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@app.get("/api/history")
+async def get_history(
+    sport: Optional[str] = None,
+    market: Optional[str] = None,
+    min_edge: Optional[float] = None,
+    days: int = 7
+):
+    """Get signal history from database"""
+    
+    signals = get_signal_history(
+        sport=sport,
+        market=market,
+        min_edge=min_edge,
+        days=days
+    )
+    
+    return {'signals': signals, 'count': len(signals)}
+
+@app.get("/api/history/stats")
+async def get_history_stats_endpoint(days: int = 7):
+    """Get statistics for signal history"""
+    
+    stats = get_history_stats(days=days)
+    return stats
 
 @app.delete("/api/files/{file_id}")
 async def delete_file(file_id: str):

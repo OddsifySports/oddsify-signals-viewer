@@ -297,12 +297,15 @@
   <div class="container">
     <header>
       <div class="logo">ODDSIFY <span>SIGNALS</span> VIEWER</div>
-      <div>
+      <div style="display: flex; gap: 1rem; align-items: center;">
+        <button class="btn-upload" onclick="exportToCSV()" style="background: var(--teal);">
+          📊 Export CSV
+        </button>
         <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
           📁 Upload File
         </button>
-        <input type="file" id="fileInput" accept=".md" onchange="handleFileUpload(event)">
       </div>
+      <input type="file" id="fileInput" accept=".md" onchange="handleFileUpload(event)">
     </header>
     
     <!-- Upload Area (drag & drop) -->
@@ -330,6 +333,13 @@
       
       <!-- Filters -->
       <div class="filters">
+        <div class="filter-group">
+          <label>View</label>
+          <select id="viewSelect" onchange="switchView()">
+            <option value="current">Current Uploads</option>
+            <option value="history">Signal History</option>
+          </select>
+        </div>
         <div class="filter-group">
           <label>Sport</label>
           <select id="sportFilter" onchange="applyFilters()">
@@ -373,6 +383,76 @@
     const API_BASE = window.location.origin; // Use current origin (works on Railway and localhost)
     let allSignals = [];
     let currentFileId = null;
+    
+    // Export to CSV
+    async function exportToCSV() {
+      try {
+        const url = `${API_BASE}/api/signals/export${currentFileId ? `?file_id=${currentFileId}` : ''}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error('Export failed');
+        }
+        
+        // Create download link
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `oddsify_signals_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+        
+        console.log('✅ CSV exported successfully');
+      } catch (error) {
+        console.error('Export failed:', error);
+        alert(`Export failed: ${error.message}`);
+      }
+    }
+    
+    // Switch between current uploads and history
+    async function switchView() {
+      const view = document.getElementById('viewSelect').value;
+      
+      if (view === 'history') {
+        await loadHistory();
+      } else {
+        await loadGroupedSignals(currentFileId);
+      }
+    }
+    
+    // Load signal history from database
+    async function loadHistory() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('content').style.display = 'none';
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/history?days=30`);
+        const data = await response.json();
+        
+        if (data.signals && data.signals.length > 0) {
+          allSignals = data.signals;
+          
+          // Get unique sports and markets for filters
+          const sports = new Set(data.signals.map(s => s.sport));
+          const markets = new Set(data.signals.map(s => s.market));
+          
+          populateFilterOptions(sports, markets);
+          updateStatsFromHistory(data.signals);
+          renderHistoryGroups(data.signals);
+          document.getElementById('content').style.display = 'block';
+        } else {
+          document.getElementById('emptyState').style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error loading history:', error);
+        document.getElementById('emptyState').style.display = 'block';
+      } finally {
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
     
     // Drag & drop
     const uploadArea = document.getElementById('uploadArea');
@@ -466,6 +546,10 @@
         markets.add(g.market);
       });
       
+      populateFilterOptions(sports, markets);
+    }
+    
+    function populateFilterOptions(sports, markets) {
       const sportSelect = document.getElementById('sportFilter');
       const marketSelect = document.getElementById('marketFilter');
       
@@ -475,12 +559,108 @@
       
       // Add options
       [...sports].sort().forEach(sport => {
-        sportSelect.innerHTML += `<option value="${sport}">${sport}</option>`;
+        if (sport) sportSelect.innerHTML += `<option value="${sport}">${sport}</option>`;
       });
       
       [...markets].sort().forEach(market => {
         marketSelect.innerHTML += `<option value="${market}">${market}</option>`;
       });
+    }
+    
+    function updateStatsFromHistory(signals) {
+      const totalSignals = signals.length;
+      const avgEdge = signals.reduce((sum, s) => sum + (s.edge || 0), 0) / totalSignals || 0;
+      const maxEdge = Math.max(...signals.map(s => s.edge || 0));
+      const strongCount = signals.filter(s => s.bucket === 'STRONG').length;
+      
+      document.getElementById('statsGrid').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-value">${totalSignals}</div>
+          <div class="stat-label">Total Signals (30 days)</div>
+        </div>
+        <div class="stat-card" style="border-left-color: var(--teal);">
+          <div class="stat-value">${avgEdge.toFixed(1)}%</div>
+          <div class="stat-label">Average Edge</div>
+        </div>
+        <div class="stat-card" style="border-left-color: var(--coral);">
+          <div class="stat-value">${maxEdge.toFixed(1)}%</div>
+          <div class="stat-label">Max Edge</div>
+        </div>
+        <div class="stat-card" style="border-left-color: var(--amber);">
+          <div class="stat-value">${strongCount}</div>
+          <div class="stat-label">STRONG Signals</div>
+        </div>
+      `;
+    }
+    
+    function renderHistoryGroups(signals) {
+      // Group signals by market and sport
+      const grouped = {};
+      signals.forEach(signal => {
+        const key = `${signal.market}__${signal.sport}`;
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+        grouped[key].push(signal);
+      });
+      
+      const container = document.getElementById('groupsContainer');
+      
+      container.innerHTML = Object.entries(grouped).map(([key, groupSignals]) => {
+        const [market, league] = key.split('__');
+        const edges = groupSignals.map(s => s.edge || 0);
+        const bucketClass = groupSignals[0]?.bucket?.toLowerCase() || 'small';
+        
+        return `
+          <div class="group-card" data-market="${market}" data-league="${league}">
+            <div class="group-header">
+              <div>
+                <div class="group-title">${market} — ${league || 'UNKNOWN'}</div>
+                <div class="group-meta">
+                  <span>${groupSignals.length} signals</span>
+                  <span>Avg edge: ${(edges.reduce((a,b) => a+b, 0) / edges.length).toFixed(1)}%</span>
+                  <span>Max edge: ${Math.max(...edges).toFixed(1)}%</span>
+                </div>
+              </div>
+              <span class="badge badge-${bucketClass}">${groupSignals[0]?.bucket || 'MIXED'}</span>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bucket</th>
+                    <th>Player</th>
+                    <th>Team</th>
+                    <th>Side</th>
+                    <th>Line</th>
+                    <th>Price</th>
+                    <th>Edge</th>
+                    <th>EV</th>
+                    <th>Book</th>
+                    <th>Uploaded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${groupSignals.map(signal => `
+                    <tr class="signal-row" data-bucket="${signal.bucket}" data-player="${(signal.player || '').toLowerCase()}" data-team="${(signal.team || '').toLowerCase()}" data-book="${(signal.book || '').toLowerCase()}">
+                      <td><span class="bucket-tag badge-${signal.bucket?.toLowerCase() || 'small'}">${signal.bucket || 'N/A'}</span></td>
+                      <td>${signal.player || 'N/A'}</td>
+                      <td>${signal.team || 'N/A'}</td>
+                      <td>${signal.side || 'N/A'}</td>
+                      <td>${signal.line || '—'}</td>
+                      <td>${signal.price || 'N/A'}</td>
+                      <td class="${(signal.edge || 0) > 0 ? 'edge-positive' : 'edge-negative'}">${(signal.edge || 0) > 0 ? '+' : ''}${(signal.edge || 0).toFixed(1)}%</td>
+                      <td class="${(signal.ev || 0) > 0 ? 'edge-positive' : 'edge-negative'}">${(signal.ev || 0) > 0 ? '+' : ''}${(signal.ev || 0).toFixed(1)}¢</td>
+                      <td>${signal.book || 'N/A'}</td>
+                      <td>${signal.uploaded_at ? new Date(signal.uploaded_at).toLocaleDateString() : 'N/A'}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
     
     function updateStats(groups) {
