@@ -314,7 +314,7 @@ async def delete_file(file_id: str):
     return {'success': True, 'message': f"Deleted {file_id}.md"}
 
 # Serve frontend
-FRONTEND_DIR = Path("/home/markusbot/oddsify-signals-viewer/frontend")
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
